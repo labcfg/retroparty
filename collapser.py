@@ -38,7 +38,7 @@ def collapser(filename, inputdir, outputdir, target_re):
                                 'READNAME',
                                 'CHR',
                                 'POS',
-                                'STRAND',
+                                'INS_STRAND',
                                 'RE',
                                 'RE_AMOUNT',
                                 'RE_HAMMING',
@@ -47,6 +47,10 @@ def collapser(filename, inputdir, outputdir, target_re):
                                 'TLEN',
                                 'CIGAR_R1',
                                 'MDFLAG_R1',
+                                'MD_SUM',
+                                'MISMATCH',
+                                'INSERTION',
+                                'DELETION',
                                 'NUM_READS',
                                 'NUM_BC']) + '\n')
     pctable = open(outputdir + readsname + '_pcread.txt', 'w')
@@ -56,7 +60,7 @@ def collapser(filename, inputdir, outputdir, target_re):
                              'READNAME',
                              'CHR',
                              'POS',
-                             'STRAND',
+                             'INS_STRAND',
                              'RE',
                              'RE_AMOUNT',
                              'RE_HAMMING',
@@ -66,12 +70,16 @@ def collapser(filename, inputdir, outputdir, target_re):
                              'TLEN',
                              'CIGAR_R1',
                              'MDFLAG_R1',
+                             'MD_SUM',
+                             'MISMATCH',
+                             'INSERTION',
+                             'DELETION',
                              'NUM_READS',
                              'NUM_BARCODE',
                              'BARCODE_LIST',
                              'BARCODE_Q_LIST']) + '\n')
 
-    df['MDR1_value'] = df['MDFLAG_R1'].apply(lambda x: sum([int(i) for i in re.findall(r'(\d+)+M', x)]))
+    df['MDR1_value'] = df['MDFLAG_R1'].apply(lambda x: sum([int(i) for i in re.findall(r'\d+', x)]))
     df_group = df.groupby(['CHR', 'INS_STRAND', 'POS'])
 
     cluster_id = 0
@@ -80,6 +88,10 @@ def collapser(filename, inputdir, outputdir, target_re):
         best_row = group.loc[group['MDR1_value'] == max(list(group['MDR1_value']))].iloc[0]
         best_re = get_best_re(list(group['RE']), target_re)
         num_bc = len(set(list(group['BARCODE'])))
+        cigar_del = sum([int(x) for x in re.findall(r'(\d+)+D', best_row['CIGAR_R1'])])
+        cigar_ins = sum([int(x) for x in re.findall(r'(\d+)+I', best_row['CIGAR_R1'])])
+        md_mm = len(re.findall('[A-Z]', best_row['MDFLAG_R1'].split('MD:Z:')[1])) - cigar_del
+        md_sum = best_row['MDR1_value'] + md_mm
         humantable.write('\t'.join([str(cluster_id),
                                     best_row['READNAME'],
                                     chrom,
@@ -93,6 +105,10 @@ def collapser(filename, inputdir, outputdir, target_re):
                                     str(best_row['TLEN']),
                                     best_row['CIGAR_R1'],
                                     best_row['MDFLAG_R1'],
+                                    str(md_sum),
+                                    str(md_mm),
+                                    str(cigar_ins),
+                                    str(cigar_del),
                                     str(np.shape(group)[0]),
                                     str(num_bc)]) + '\n')
         pctable.write('\t'.join([str(cluster_id),
@@ -111,6 +127,10 @@ def collapser(filename, inputdir, outputdir, target_re):
                                  str(best_row['TLEN']),
                                  best_row['CIGAR_R1'],
                                  best_row['MDFLAG_R1'],
+                                 str(md_sum),
+                                 str(md_mm),
+                                 str(cigar_ins),
+                                 str(cigar_del),
                                  str(np.shape(group)[0]),
                                  str(num_bc),
                                  ''.join(list(group['BARCODE'])),
